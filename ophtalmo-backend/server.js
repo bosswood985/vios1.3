@@ -57,10 +57,15 @@ pool.query('SELECT NOW()', (err) => {
 });
 
 // ==================== MIDDLEWARE ====================
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({ 
   origin: process.env.FRONTEND_URL || '*',
-  credentials: true 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
@@ -75,11 +80,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting
+// Rate limiting - more lenient for authenticated users
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: 1000, // limit each IP to 1000 requests per windowMs (increased)
+  message: 'Too many requests from this IP, please try again later.',
+  skip: (req) => {
+    // Skip rate limiting for authenticated users to prevent lockout
+    const token = req.headers.authorization?.split(' ')[1];
+    return !!token;
+  }
 });
 app.use('/api/', limiter);
 
@@ -264,9 +274,217 @@ const ENTITIES = {
   User: { table: 'user_table', searchFields: ['email', 'full_name'] }
 };
 
+// ==================== USER CREATION (Special handling) ====================
+app.post('/api/User',
+  authMiddleware,
+  authorize('admin'), // Only admins can create users
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 6 }),
+    body('full_name').notEmpty().trim(),
+    body('specialite').notEmpty(),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { email, password, full_name, specialite } = req.body;
+      
+      // Check if user already exists
+      const existingUser = await pool.query(
+        'SELECT id FROM user_table WHERE email = $1',
+        [email]
+      );
+      
+      if (existingUser.rows.length > 0) {
+        throw new ValidationError('A user with this email already exists');
+      }
+      
+      // Hash the password
+      const password_hash = await bcrypt.hash(password, 10);
+      
+      // Create user
+      const query = `
+        INSERT INTO user_table (email, password_hash, full_name, specialite, role, is_active, created_by, created_date, updated_date)
+        VALUES ($1, $2, $3, $4, $5, true, $6, NOW(), NOW())
+        RETURNING id, email, full_name, specialite, role, is_active, created_date
+      `;
+      
+      const result = await pool.query(query, [
+        email,
+        password_hash,
+        full_name,
+        specialite,
+        specialite, // role = specialite
+        req.user.email
+      ]);
+      
+      await logAudit(req.user.id, 'create', 'user_table', null);
+      
+      logger.info('User created', { 
+        id: result.rows[0].id, 
+        email: result.rows[0].email,
+        createdBy: req.user.email 
+      });
+      
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Update user (admin only)
+app.put('/api/User/:id',
+  authMiddleware,
+  authorize('admin'),
+  [param('id').isUUID()],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { full_name, specialite, role } = req.body;
+      
+      const updates = [];
+      const values = [];
+      let paramCount = 1;
+      
+      if (full_name) {
+        updates.push(`full_name = ${paramCount++}`);
+        values.push(full_name);
+      }
+      
+      if (specialite) {
+        updates.push(`specialite = ${paramCount++}`);
+        values.push(specialite);
+      }
+      
+      if (role) {
+        updates.push(`role = ${paramCount++}`);
+        values.push(role);
+      }
+      
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+      
+      updates.push(`updated_date = NOW()`);
+      values.push(req.params.id);
+      
+      const query = `
+        UPDATE user_table
+        SET ${updates.join(', ')}
+        WHERE id = ${paramCount}
+        RETURNING id, email, full_name, specialite, role, is_active, created_date, updated_date
+      `;
+      
+      const result = await pool.query(query, values);
+      
+      if (result.rows.length === 0) {
+        throw new NotFoundError('User not found');
+      }
+      
+      await logAudit(req.user.id, 'update', 'user_table', null);
+      
+      logger.info('User updated', { id: req.params.id, updatedBy: req.user.email });
+      
+      res.json(result.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete user (admin only)
+app.delete('/api/User/:id',
+  authMiddleware,
+  authorize('admin'),
+  [param('id').isUUID()],
+  validate,
+  async (req, res, next) => {
+    try {
+      // Prevent self-deletion
+      if (req.params.id === req.user.id) {
+        throw new ValidationError('You cannot delete your own account');
+      }
+      
+      const result = await pool.query(
+        'DELETE FROM user_table WHERE id = $1 RETURNING id, email',
+        [req.params.id]
+      );
+      
+      if (result.rows.length === 0) {
+        throw new NotFoundError('User not found');
+      }
+      
+      await logAudit(req.user.id, 'delete', 'user_table', null);
+      
+      logger.info('User deleted', { 
+        id: req.params.id, 
+        email: result.rows[0].email,
+        deletedBy: req.user.email 
+      });
+      
+      res.json({ success: true, id: req.params.id });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// List users (admin only)
+app.get('/api/User',
+  authMiddleware,
+  authorize('admin'),
+  async (req, res, next) => {
+    try {
+      const result = await pool.query(
+        'SELECT id, email, full_name, specialite, role, is_active, created_date, updated_date FROM user_table ORDER BY created_date DESC'
+      );
+      
+      res.json({
+        data: result.rows,
+        pagination: {
+          page: 1,
+          limit: result.rows.length,
+          total: result.rows.length,
+          pages: 1
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get single user (admin only)
+app.get('/api/User/:id',
+  authMiddleware,
+  authorize('admin'),
+  [param('id').isUUID()],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await pool.query(
+        'SELECT id, email, full_name, specialite, role, is_active, created_date, updated_date FROM user_table WHERE id = $1',
+        [req.params.id]
+      );
+      
+      if (result.rows.length === 0) {
+        throw new NotFoundError('User not found');
+      }
+      
+      res.json(result.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ==================== GENERIC CRUD ROUTES ====================
 Object.entries(ENTITIES).forEach(([entityName, config]) => {
   const { table, searchFields, validation = {} } = config;
+  
+  // Skip User entity - it has special handling above
+  if (entityName === 'User') return;
   
   // LIST with pagination and search
   app.get(`/api/${entityName}`, 

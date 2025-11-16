@@ -1,14 +1,47 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// Token management
+const TOKEN_KEY = 'ophtalmo_auth_token';
+
+const getToken = () => {
+  return localStorage.getItem(TOKEN_KEY);
+};
+
+const setToken = (token) => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+const removeToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+};
+
 class EntityAPI {
   constructor(entityName) {
     this.entityName = entityName;
   }
 
   async list(sort = '-created_date', limit = 1000) {
-    const response = await fetch(`${API_BASE_URL}/${this.entityName}`);
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/${this.entityName}`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      }
+    });
+    
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!response.ok) throw new Error('Failed to fetch');
-    const data = await response.json();
+    
+    let data = await response.json();
+    
+    // Handle paginated response
+    if (data.data && Array.isArray(data.data)) {
+      data = data.data;
+    }
     
     if (sort.startsWith('-')) {
       const field = sort.substring(1);
@@ -25,17 +58,40 @@ class EntityAPI {
   }
 
   async get(id) {
-    const response = await fetch(`${API_BASE_URL}/${this.entityName}/${id}`);
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/${this.entityName}/${id}`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      }
+    });
+    
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!response.ok) throw new Error('Failed to fetch');
     return await response.json();
   }
 
   async create(data) {
+    const token = getToken();
     const response = await fetch(`${API_BASE_URL}/${this.entityName}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
       body: JSON.stringify(data)
     });
+    
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to create');
@@ -49,11 +105,22 @@ class EntityAPI {
   }
 
   async update(id, data) {
+    const token = getToken();
     const response = await fetch(`${API_BASE_URL}/${this.entityName}/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
       body: JSON.stringify(data)
     });
+    
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to update');
@@ -62,9 +129,20 @@ class EntityAPI {
   }
 
   async delete(id) {
+    const token = getToken();
     const response = await fetch(`${API_BASE_URL}/${this.entityName}/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      }
     });
+    
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
     if (!response.ok) throw new Error('Failed to delete');
     return await response.json();
   }
@@ -103,50 +181,112 @@ export const base44 = {
   },
 
   auth: {
+    async login(email, password) {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Login failed');
+      }
+      
+      const data = await response.json();
+      setToken(data.token);
+      return data.user;
+    },
+
     async me() {
+      const token = getToken();
+      if (!token) {
+        throw new Error('No token');
+      }
+      
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/me`);
-        if (!response.ok) return { email: 'default@user.com', specialite: 'admin', full_name: 'Utilisateur' };
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+        
+        if (response.status === 401) {
+          removeToken();
+          throw new Error('Unauthorized');
+        }
+        
+        if (!response.ok) throw new Error('Failed to fetch user');
         return await response.json();
-      } catch {
-        return { email: 'default@user.com', specialite: 'admin', full_name: 'Utilisateur' };
+      } catch (error) {
+        removeToken();
+        throw error;
       }
     },
 
     async updateMe(data) {
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
         body: JSON.stringify(data)
       });
+      
+      if (response.status === 401) {
+        removeToken();
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+      }
+      
       if (!response.ok) throw new Error('Failed to update user');
       return await response.json();
     },
 
     async isAuthenticated() {
-      return true;
+      const token = getToken();
+      if (!token) return false;
+      
+      try {
+        await this.me();
+        return true;
+      } catch {
+        return false;
+      }
     },
 
-    logout(redirectUrl) {
-      if (redirectUrl) window.location.href = redirectUrl;
-      else window.location.reload();
+    logout() {
+      removeToken();
+      window.location.href = '/login';
     },
 
-    redirectToLogin(nextUrl) {
-      // Pas de login requis en local
-    }
+    getToken,
+    setToken,
+    removeToken
   },
 
   integrations: {
     Core: {
       async UploadFile({ file }) {
+        const token = getToken();
         const formData = new FormData();
         formData.append('file', file);
         
         const response = await fetch(`${API_BASE_URL}/upload`, {
           method: 'POST',
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
           body: formData
         });
+        
+        if (response.status === 401) {
+          removeToken();
+          window.location.href = '/login';
+          throw new Error('Unauthorized');
+        }
         
         if (!response.ok) throw new Error('Failed to upload file');
         return await response.json();

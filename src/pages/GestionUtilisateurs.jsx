@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Users, Edit, UserPlus, Info, Shield, Trash2 } from "lucide-react";
+import { Users, Edit, UserPlus, Shield, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -25,22 +24,39 @@ export default function GestionUtilisateurs() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showInviteInfo, setShowInviteInfo] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  
   const [formData, setFormData] = useState({
     full_name: "",
-    specialite: ""
+    specialite: "secretaire"
+  });
+
+  const [createFormData, setCreateFormData] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    specialite: "secretaire"
   });
 
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const user = await base44.auth.me().catch(() => null);
-        setCurrentUser(user || { specialite: 'admin', id: 'default' });
+        const user = await base44.auth.me();
+        setCurrentUser(user);
+        
+        if (user.specialite !== 'admin') {
+          navigate(createPageUrl("SalleAttente"));
+        }
+      } catch (error) {
+        console.error('Error loading user:', error);
+        navigate('/login');
       } finally {
         setIsLoading(false);
       }
@@ -48,33 +64,83 @@ export default function GestionUtilisateurs() {
     loadUser();
   }, [navigate]);
 
-  const { data: users, isLoading: loadingUsers } = useQuery({
+  const { data: users, isLoading: loadingUsers, refetch: refetchUsers } = useQuery({
     queryKey: ['users'],
-    queryFn: () => base44.entities.User.list(),
+    queryFn: async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/User`, {
+          headers: {
+            'Authorization': `Bearer ${base44.auth.getToken()}`,
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch users');
+        }
+        
+        const result = await response.json();
+        return result.data || result;
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        return [];
+      }
+    },
     initialData: [],
     enabled: !!currentUser && currentUser.specialite === 'admin',
   });
 
-  const updateUserMutation = useMutation({
-    mutationFn: ({ userId, userData }) => {
-      return base44.entities.User.update(userId, userData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      setShowEditDialog(false);
-      setEditingUser(null);
-      setFormData({ full_name: "", specialite: "" });
-    },
-  });
+  const handleCreateUser = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+    
+    if (!createFormData.email || !createFormData.password || !createFormData.full_name || !createFormData.specialite) {
+      setErrorMessage("Tous les champs sont obligatoires");
+      return;
+    }
 
-  const deleteUserMutation = useMutation({
-    mutationFn: (userId) => base44.entities.User.delete(userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      setShowDeleteDialog(false);
-      setUserToDelete(null);
-    },
-  });
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createFormData.email)) {
+      setErrorMessage("Email invalide");
+      return;
+    }
+
+    // Password strength check
+    if (createFormData.password.length < 6) {
+      setErrorMessage("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/User`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${base44.auth.getToken()}`,
+        },
+        body: JSON.stringify(createFormData)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create user');
+      }
+      
+      await refetchUsers();
+      setShowCreateDialog(false);
+      setCreateFormData({
+        email: "",
+        password: "",
+        full_name: "",
+        specialite: "secretaire"
+      });
+      setSuccessMessage("Utilisateur créé avec succès");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error) {
+      console.error('Create user error:', error);
+      setErrorMessage(error.message || "Erreur lors de la création de l'utilisateur");
+    }
+  };
 
   const handleEditUser = (user) => {
     setEditingUser(user);
@@ -83,30 +149,80 @@ export default function GestionUtilisateurs() {
       specialite: user.specialite || "secretaire"
     });
     setShowEditDialog(true);
+    setErrorMessage("");
   };
 
   const handleSaveUser = async () => {
+    setErrorMessage("");
+    
     if (!editingUser || !formData.full_name || !formData.specialite) {
+      setErrorMessage("Nom et spécialité sont obligatoires");
       return;
     }
     
-    await updateUserMutation.mutateAsync({
-      userId: editingUser.id,
-      userData: {
-        full_name: formData.full_name,
-        specialite: formData.specialite
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/User/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${base44.auth.getToken()}`,
+        },
+        body: JSON.stringify({
+          full_name: formData.full_name,
+          specialite: formData.specialite,
+          role: formData.specialite
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update user');
       }
-    });
+      
+      await refetchUsers();
+      setShowEditDialog(false);
+      setEditingUser(null);
+      setFormData({ full_name: "", specialite: "secretaire" });
+      setSuccessMessage("Utilisateur modifié avec succès");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error) {
+      console.error('Update user error:', error);
+      setErrorMessage(error.message || "Erreur lors de la modification");
+    }
   };
 
   const handleDeleteUser = (user) => {
     setUserToDelete(user);
     setShowDeleteDialog(true);
+    setErrorMessage("");
   };
 
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
-    await deleteUserMutation.mutateAsync(userToDelete.id);
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/User/${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${base44.auth.getToken()}`,
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete user');
+      }
+      
+      await refetchUsers();
+      setShowDeleteDialog(false);
+      setUserToDelete(null);
+      setSuccessMessage("Utilisateur supprimé");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error) {
+      console.error('Delete user error:', error);
+      setErrorMessage(error.message || "Erreur lors de la suppression");
+      setShowDeleteDialog(false);
+    }
   };
 
   if (isLoading) {
@@ -150,13 +266,32 @@ export default function GestionUtilisateurs() {
             <p className="text-gray-500">Gérer les rôles et permissions</p>
           </div>
           <Button
-            onClick={() => setShowInviteInfo(true)}
+            onClick={() => {
+              setShowCreateDialog(true);
+              setErrorMessage("");
+            }}
             className="bg-blue-600 hover:bg-blue-700 gap-2"
           >
             <UserPlus className="w-4 h-4" />
-            Inviter un utilisateur
+            Créer un utilisateur
           </Button>
         </div>
+
+        {successMessage && (
+          <Alert className="mb-6 bg-green-50 border-green-200">
+            <AlertDescription className="text-green-800">
+              {successMessage}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {errorMessage && !showCreateDialog && !showEditDialog && (
+          <Alert className="mb-6 bg-red-50 border-red-200">
+            <AlertDescription className="text-red-800">
+              {errorMessage}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {loadingUsers ? (
@@ -229,9 +364,11 @@ export default function GestionUtilisateurs() {
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Créé le {new Date(user.created_date).toLocaleDateString('fr-FR')}
-                    </div>
+                    {user.created_date && (
+                      <div className="text-xs text-gray-500">
+                        Créé le {new Date(user.created_date).toLocaleDateString('fr-FR')}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -239,12 +376,108 @@ export default function GestionUtilisateurs() {
           )}
         </div>
 
+        {/* Create User Dialog */}
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Créer un nouvel utilisateur</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {errorMessage && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertDescription className="text-red-800">
+                    {errorMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              <div>
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={createFormData.email}
+                  onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
+                  placeholder="utilisateur@exemple.com"
+                />
+              </div>
+              <div>
+                <Label>Mot de passe *</Label>
+                <Input
+                  type="password"
+                  value={createFormData.password}
+                  onChange={(e) => setCreateFormData({ ...createFormData, password: e.target.value })}
+                  placeholder="Minimum 6 caractères"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Le mot de passe doit contenir au moins 6 caractères
+                </p>
+              </div>
+              <div>
+                <Label>Nom complet *</Label>
+                <Input
+                  value={createFormData.full_name}
+                  onChange={(e) => setCreateFormData({ ...createFormData, full_name: e.target.value })}
+                  placeholder="Dr. Prénom Nom"
+                />
+              </div>
+              <div>
+                <Label>Rôle / Spécialité *</Label>
+                <Select
+                  value={createFormData.specialite}
+                  onValueChange={(value) => setCreateFormData({ ...createFormData, specialite: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-red-600" />
+                        Administrateur
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="secretaire">Secrétaire</SelectItem>
+                    <SelectItem value="orthoptiste">Orthoptiste</SelectItem>
+                    <SelectItem value="ophtalmologue">Ophtalmologue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowCreateDialog(false);
+                    setErrorMessage("");
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button 
+                  onClick={handleCreateUser} 
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Créer l'utilisateur
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit User Dialog */}
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Modifier l'utilisateur</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {errorMessage && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertDescription className="text-red-800">
+                    {errorMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div>
                 <Label>Nom complet *</Label>
                 <Input
@@ -258,6 +491,9 @@ export default function GestionUtilisateurs() {
                 <div className="text-sm text-gray-600 mt-1 p-2 bg-gray-50 rounded">
                   {editingUser?.email}
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  L'email ne peut pas être modifié
+                </p>
               </div>
               <div>
                 <Label>Rôle / Spécialité *</Label>
@@ -280,26 +516,29 @@ export default function GestionUtilisateurs() {
                     <SelectItem value="ophtalmologue">Ophtalmologue</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-2">
-                  Les administrateurs ont accès à toutes les fonctionnalités de gestion
-                </p>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setErrorMessage("");
+                  }}
+                >
                   Annuler
                 </Button>
                 <Button 
                   onClick={handleSaveUser} 
                   className="bg-blue-600 hover:bg-blue-700"
-                  disabled={!formData.full_name || !formData.specialite || updateUserMutation.isPending}
                 >
-                  {updateUserMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                  Enregistrer
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
+        {/* Delete User Dialog */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <DialogContent>
             <DialogHeader>
@@ -330,10 +569,6 @@ export default function GestionUtilisateurs() {
                 </div>
               </div>
 
-              <p className="text-sm text-gray-700">
-                Cet utilisateur perdra immédiatement l'accès à l'application et toutes ses données associées seront conservées mais il ne pourra plus se connecter.
-              </p>
-
               <div className="flex justify-end gap-3 mt-6">
                 <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
                   Annuler
@@ -341,39 +576,8 @@ export default function GestionUtilisateurs() {
                 <Button 
                   onClick={confirmDeleteUser}
                   className="bg-red-600 hover:bg-red-700"
-                  disabled={deleteUserMutation.isPending}
                 >
-                  {deleteUserMutation.isPending ? "Suppression..." : "Supprimer définitivement"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={showInviteInfo} onOpenChange={setShowInviteInfo}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Info className="w-5 h-5 text-blue-600" />
-                Inviter un nouvel utilisateur
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700 mb-3">
-                  Pour inviter un nouvel utilisateur à rejoindre votre cabinet :
-                </p>
-                <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
-                  <li>Accédez au <strong>Dashboard Base44</strong></li>
-                  <li>Cliquez sur <strong>"Invite User"</strong></li>
-                  <li>Entrez l'email du nouvel utilisateur</li>
-                  <li>Il recevra un email d'invitation</li>
-                  <li>Une fois connecté, vous pourrez lui attribuer un rôle ici</li>
-                </ol>
-              </div>
-              <div className="flex justify-end">
-                <Button onClick={() => setShowInviteInfo(false)}>
-                  Compris
+                  Supprimer définitivement
                 </Button>
               </div>
             </div>
