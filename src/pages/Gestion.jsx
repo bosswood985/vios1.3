@@ -359,6 +359,7 @@ export default function Gestion() {
       queryClient.invalidateQueries({ queryKey: ['current-user'] });
       setShowSignatureDialog(false);
       base44.auth.me().then(setCurrentUser);
+      toast.success("Documents & signature mis à jour avec succès");
     },
   });
 
