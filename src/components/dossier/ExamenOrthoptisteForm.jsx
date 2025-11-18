@@ -821,7 +821,7 @@ export default function ExamenOrthoptisteForm({ patientId, patient }) {
     const nouvelExamen = {
       patient_id: patientId,
       date_examen: new Date().toISOString(),
-      ref_subjective_sous_skiacol: true,
+      ref_subjective_sous_skiacol: false,
       motif_consultation: "",
       notes: ""
     };
@@ -893,7 +893,7 @@ export default function ExamenOrthoptisteForm({ patientId, patient }) {
                     onClick={() => switchExamen(idx)}
                     className="h-7 text-xs"
                   >
-                    Examen {idx + 1} {ex.ref_subjective_sous_skiacol && "(Skiacol)"}
+                    Examen {idx + 1}
                   </Button>
                 ))}
                 {canEdit && examensAujourdhui.length < 2 && (
