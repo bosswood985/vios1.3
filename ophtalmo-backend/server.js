@@ -237,7 +237,8 @@ const ENTITIES = {
   DossierATraiter: { table: 'dossieratraiter' },
   IVT: { table: 'ivt' },
   TypeVerres: { table: 'typeverres' },
-  Consultation: { table: 'consultation' }
+  Consultation: { table: 'consultation' },
+  Abbreviation: { table: 'abbreviation' }
 };
 
 // ==================== AUTH ROUTES ====================

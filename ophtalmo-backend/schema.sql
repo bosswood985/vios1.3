@@ -469,6 +469,22 @@ CREATE TABLE IF NOT EXISTS typeverres (
   deleted_at TIMESTAMP
 );
 
+-- ==================== ABBREVIATIONS ====================
+CREATE TABLE IF NOT EXISTS abbreviation (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  abbreviation VARCHAR(50) NOT NULL,
+  full_text TEXT NOT NULL,
+  description VARCHAR(255),
+  is_global BOOLEAN DEFAULT FALSE,
+  created_date TIMESTAMP DEFAULT NOW(),
+  updated_date TIMESTAMP DEFAULT NOW(),
+  created_by VARCHAR(255),
+  deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_abbreviation_abbrev ON abbreviation(abbreviation);
+CREATE INDEX idx_abbreviation_global ON abbreviation(is_global);
+
 -- ==================== CONSULTATION ====================
 CREATE TABLE IF NOT EXISTS consultation (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
