@@ -116,6 +116,14 @@ export default function Gestion() {
     template_word_url: ""
   });
 
+  const [showAbbreviationDialog, setShowAbbreviationDialog] = useState(false);
+  const [newAbbreviation, setNewAbbreviation] = useState({
+    abbreviation: "",
+    full_text: "",
+    description: "",
+    is_global: false
+  });
+
   useEffect(() => {
     if (currentUser) {
       setSignatureData({
@@ -210,6 +218,16 @@ export default function Gestion() {
     queryFn: async () => {
       const all = await base44.entities.MegaRaccourci.list();
       return all.filter(r => r.is_global || r.created_by === currentUser?.email);
+    },
+    initialData: [],
+    enabled: !!currentUser,
+  });
+
+  const { data: abbreviations } = useQuery({
+    queryKey: ['abbreviations'],
+    queryFn: async () => {
+      const all = await base44.entities.Abbreviation.list();
+      return all.filter(a => a.is_global || a.created_by === currentUser?.email);
     },
     initialData: [],
     enabled: !!currentUser,
@@ -350,6 +368,24 @@ export default function Gestion() {
     mutationFn: (id) => base44.entities.MegaRaccourci.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mega-raccourcis'] });
+    },
+  });
+
+  const createAbbreviationMutation = useMutation({
+    mutationFn: (data) => base44.entities.Abbreviation.create({ ...data, created_by: currentUser?.email }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['abbreviations'] });
+      setShowAbbreviationDialog(false);
+      setNewAbbreviation({ abbreviation: "", full_text: "", description: "", is_global: false });
+      toast.success("Abréviation créée avec succès");
+    },
+  });
+
+  const deleteAbbreviationMutation = useMutation({
+    mutationFn: (id) => base44.entities.Abbreviation.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['abbreviations'] });
+      toast.success("Abréviation supprimée avec succès");
     },
   });
 
@@ -524,6 +560,10 @@ export default function Gestion() {
               <Eye className="w-4 h-4" />
               Associations
             </TabsTrigger>
+            <TabsTrigger value="abbreviations" className="gap-2">
+              <Zap className="w-4 h-4" />
+              Abréviations
+            </TabsTrigger>
             <TabsTrigger value="raccourcis" className="gap-2">
               <Zap className="w-4 h-4" />
               Raccourcis Examen
@@ -655,6 +695,68 @@ export default function Gestion() {
                             variant="ghost"
                             size="sm"
                             onClick={() => deleteAssociationMutation.mutate(assoc.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="abbreviations" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold">Abréviations automatiques</h2>
+                <p className="text-sm text-gray-500 mt-1">Les abréviations se transforment automatiquement en texte complet lors de la saisie</p>
+              </div>
+              <Button onClick={() => setShowAbbreviationDialog(true)} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Ajouter une abréviation
+              </Button>
+            </div>
+
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[150px]">Abréviation</TableHead>
+                    <TableHead>Texte complet</TableHead>
+                    <TableHead className="w-[200px]">Description</TableHead>
+                    <TableHead className="w-[100px]">Portée</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {abbreviations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        Aucune abréviation enregistrée
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    abbreviations.map((abbr) => (
+                      <TableRow key={abbr.id}>
+                        <TableCell className="font-mono font-medium">{abbr.abbreviation}</TableCell>
+                        <TableCell className="text-sm">{abbr.full_text}</TableCell>
+                        <TableCell className="text-sm text-gray-600">{abbr.description}</TableCell>
+                        <TableCell>
+                          {abbr.is_global && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              <Globe className="w-3 h-3 mr-1" />
+                              Global
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteAbbreviationMutation.mutate(abbr.id)}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1854,6 +1956,73 @@ export default function Gestion() {
                 <Button 
                   onClick={() => createLentilleMutation.mutate(newLentille)}
                   disabled={!newLentille.marque || !newLentille.type_renouvellement}
+                >
+                  Enregistrer
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Raccourci */}
+        {/* Dialog Abréviation */}
+        <Dialog open={showAbbreviationDialog} onOpenChange={setShowAbbreviationDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Ajouter une abréviation automatique</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={newAbbreviation.is_global}
+                    onChange={(e) => setNewAbbreviation({ ...newAbbreviation, is_global: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Globe className="w-4 h-4" />
+                  Abréviation globale (visible par tous)
+                </Label>
+              </div>
+              <div>
+                <Label>Abréviation *</Label>
+                <Input
+                  value={newAbbreviation.abbreviation}
+                  onChange={(e) => setNewAbbreviation({ ...newAbbreviation, abbreviation: e.target.value })}
+                  placeholder="Ex: ppn"
+                  className="font-mono"
+                />
+                <p className="text-xs text-gray-500 mt-1">Tapez cette abréviation suivie d'un espace pour l'expansion automatique</p>
+              </div>
+              <div>
+                <Label>Texte complet *</Label>
+                <Textarea
+                  value={newAbbreviation.full_text}
+                  onChange={(e) => setNewAbbreviation({ ...newAbbreviation, full_text: e.target.value })}
+                  rows={3}
+                  placeholder="Ex: pôle postérieur normal"
+                />
+              </div>
+              <div>
+                <Label>Description (optionnelle)</Label>
+                <Input
+                  value={newAbbreviation.description}
+                  onChange={(e) => setNewAbbreviation({ ...newAbbreviation, description: e.target.value })}
+                  placeholder="Ex: Description du pôle postérieur"
+                />
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-gray-600">
+                  L'abréviation sera automatiquement remplacée par le texte complet lorsque vous tapez un espace après celle-ci dans les champs de texte compatibles.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setShowAbbreviationDialog(false)}>
+                  Annuler
+                </Button>
+                <Button 
+                  onClick={() => createAbbreviationMutation.mutate(newAbbreviation)}
+                  disabled={!newAbbreviation.abbreviation || !newAbbreviation.full_text}
                 >
                   Enregistrer
                 </Button>
