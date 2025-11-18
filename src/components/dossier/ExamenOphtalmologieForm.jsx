@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TextareaWithAbbreviations } from "@/components/ui/textarea-with-abbreviations";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -538,12 +539,13 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <Textarea
+                  <TextareaWithAbbreviations
                     value={formData.lampe_fente_od}
                     onChange={(e) => handleChange('lampe_fente_od', e.target.value)}
                     rows={3}
                     className="text-sm"
                     disabled={!canEdit}
+                    currentUserId={currentUser?.email}
                   />
                 </div>
                 <div>
@@ -560,12 +562,13 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <Textarea
+                  <TextareaWithAbbreviations
                     value={formData.lampe_fente_og}
                     onChange={(e) => handleChange('lampe_fente_og', e.target.value)}
                     rows={3}
                     className="text-sm"
                     disabled={!canEdit}
+                    currentUserId={currentUser?.email}
                   />
                 </div>
               </div>
@@ -612,12 +615,13 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <Textarea
+                  <TextareaWithAbbreviations
                     value={formData.fond_oeil_od}
                     onChange={(e) => handleChange('fond_oeil_od', e.target.value)}
                     rows={3}
                     className="text-sm"
                     disabled={!canEdit}
+                    currentUserId={currentUser?.email}
                   />
                 </div>
                 <div>
@@ -634,12 +638,13 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <Textarea
+                  <TextareaWithAbbreviations
                     value={formData.fond_oeil_og}
                     onChange={(e) => handleChange('fond_oeil_og', e.target.value)}
                     rows={3}
                     className="text-sm"
                     disabled={!canEdit}
+                    currentUserId={currentUser?.email}
                   />
                 </div>
               </div>
@@ -671,13 +676,14 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                     </div>
                   )}
                 </div>
-                <Textarea
+                <TextareaWithAbbreviations
                   value={formData.diagnostic}
                   onChange={(e) => handleChange('diagnostic', e.target.value)}
                   rows={3}
                   placeholder="Diagnostic du patient..."
                   className="text-sm"
                   disabled={!canEdit}
+                  currentUserId={currentUser?.email}
                 />
               </div>
 
@@ -701,13 +707,14 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
                     </div>
                   )}
                 </div>
-                <Textarea
+                <TextareaWithAbbreviations
                   value={formData.conduite_tenir}
                   onChange={(e) => handleChange('conduite_tenir', e.target.value)}
                   rows={3}
                   placeholder="Traitement et suivi..."
                   className="text-sm"
                   disabled={!canEdit}
+                  currentUserId={currentUser?.email}
                 />
               </div>
 
@@ -731,12 +738,13 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
 
           <div>
             <Label className="text-xs">Notes additionnelles</Label>
-            <Textarea
+            <TextareaWithAbbreviations
               value={formData.notes}
               onChange={(e) => handleChange('notes', e.target.value)}
               rows={2}
               className="text-sm"
               disabled={!canEdit}
+              currentUserId={currentUser?.email}
             />
           </div>
         </CardContent>
