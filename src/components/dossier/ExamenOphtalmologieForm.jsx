@@ -407,6 +407,8 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
 
   const raccourcisLampeFente = raccourcis.filter(r => r.categorie === 'lampe_fente');
   const raccourcisFondOeil = raccourcis.filter(r => r.categorie === 'fond_oeil');
+  const raccourcisDiagnostic = raccourcis.filter(r => r.categorie === 'diagnostic');
+  const raccourcisConduiteTenir = raccourcis.filter(r => r.categorie === 'conduite_tenir');
 
   const nomAffichage = examenDuJour?.created_by 
     ? (() => {
@@ -498,7 +500,26 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
 
           <Card className="border border-blue-200">
             <CardHeader className="bg-blue-50 py-2 px-3">
-              <CardTitle className="text-sm">Lampe à fente</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm">Lampe à fente</CardTitle>
+                {raccourcisLampeFente.length > 0 && canEdit && (
+                  <div className="flex gap-1 flex-wrap">
+                    {raccourcisLampeFente.map((raccourci) => (
+                      <Button
+                        key={raccourci.id}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => appliquerRaccourci('lampe_fente_od', raccourci.texte)}
+                        className="h-6 text-xs px-2"
+                        disabled={!canEdit}
+                        title={`Appliquer à OD: ${raccourci.nom}`}
+                      >
+                        {raccourci.nom}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="py-2 px-3">
               <div className="grid grid-cols-2 gap-3">
@@ -553,7 +574,26 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
 
           <Card className="border border-red-200">
             <CardHeader className="bg-red-50 py-2 px-3">
-              <CardTitle className="text-sm">Fond d'œil</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm">Fond d'œil</CardTitle>
+                {raccourcisFondOeil.length > 0 && canEdit && (
+                  <div className="flex gap-1 flex-wrap">
+                    {raccourcisFondOeil.map((raccourci) => (
+                      <Button
+                        key={raccourci.id}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => appliquerRaccourci('fond_oeil_od', raccourci.texte)}
+                        className="h-6 text-xs px-2"
+                        disabled={!canEdit}
+                        title={`Appliquer à OD: ${raccourci.nom}`}
+                      >
+                        {raccourci.nom}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="py-2 px-3">
               <div className="grid grid-cols-2 gap-3">
@@ -612,7 +652,25 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
             </CardHeader>
             <CardContent className="py-2 px-3 space-y-2">
               <div>
-                <Label className="text-xs">Diagnostic</Label>
+                <div className="flex justify-between items-center mb-1">
+                  <Label className="text-xs">Diagnostic</Label>
+                  {raccourcisDiagnostic.length > 0 && canEdit && (
+                    <div className="flex gap-1 flex-wrap">
+                      {raccourcisDiagnostic.map((raccourci) => (
+                        <Button
+                          key={raccourci.id}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => appliquerRaccourci('diagnostic', raccourci.texte)}
+                          className="h-6 text-xs px-2"
+                          disabled={!canEdit}
+                        >
+                          {raccourci.nom}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Textarea
                   value={formData.diagnostic}
                   onChange={(e) => handleChange('diagnostic', e.target.value)}
@@ -624,7 +682,25 @@ export default function ExamenOphtalmologieForm({ patientId, patient }) {
               </div>
 
               <div>
-                <Label className="text-xs">Conduite à tenir</Label>
+                <div className="flex justify-between items-center mb-1">
+                  <Label className="text-xs">Conduite à tenir</Label>
+                  {raccourcisConduiteTenir.length > 0 && canEdit && (
+                    <div className="flex gap-1 flex-wrap">
+                      {raccourcisConduiteTenir.map((raccourci) => (
+                        <Button
+                          key={raccourci.id}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => appliquerRaccourci('conduite_tenir', raccourci.texte)}
+                          className="h-6 text-xs px-2"
+                          disabled={!canEdit}
+                        >
+                          {raccourci.nom}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Textarea
                   value={formData.conduite_tenir}
                   onChange={(e) => handleChange('conduite_tenir', e.target.value)}
