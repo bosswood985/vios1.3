@@ -1901,6 +1901,8 @@ export default function Gestion() {
                   <SelectContent>
                     <SelectItem value="lampe_fente">Lampe à fente</SelectItem>
                     <SelectItem value="fond_oeil">Fond d'œil</SelectItem>
+                    <SelectItem value="diagnostic">Diagnostic</SelectItem>
+                    <SelectItem value="conduite_tenir">Conduite à tenir</SelectItem>
                     <SelectItem value="motilite">Motilité</SelectItem>
                     <SelectItem value="motif_consultation">Motif de consultation</SelectItem>
                     <SelectItem value="allergie">Allergie</SelectItem>
