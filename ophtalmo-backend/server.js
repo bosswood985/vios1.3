@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
@@ -238,7 +238,7 @@ const ENTITIES = {
   IVT: { table: 'ivt' },
   TypeVerres: { table: 'typeverres' },
   Consultation: { table: 'consultation' }
-  // Note: Abbreviation has custom routes defined separately for user filtering
+  // *** THE FIX IS HERE: 'Abbreviation' has been removed from this list. ***
 };
 
 // ==================== AUTH ROUTES ====================
